@@ -26,7 +26,25 @@ export async function createOrder(p){
  if(usePg)await pool.query('INSERT INTO orders (id,access_code,access_token,created_at,status,customer_name,phone,email,company,project_type,address,comment,items_json,total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)',[id,accessCode,accessToken,createdAt,'Новая',order.customerName,order.phone,order.email,order.company,order.projectType,order.address,order.comment,JSON.stringify(items),total]);else{const rows=local();rows.push(order);save(rows)}return order;
 }
 function publicOrder(r){return {id:r.id,accessCode:r.access_code||r.accessCode,createdAt:r.created_at||r.createdAt,status:r.status,customerName:r.customer_name||r.customerName,phone:r.phone,email:r.email,company:r.company||'',projectType:r.project_type||r.projectType||'',address:r.address||'',comment:r.comment||'',items:r.items_json||r.items,total:Number(r.total)}}
-export async function getOrderByCode(id,code){await ready;if(!/^MMW-\d{8}-\d{5}$/.test(id)||!/^[0-9]{5}$/.test(code))return null;const r=usePg?(await pool.query('SELECT * FROM orders WHERE id=$1 AND access_code=$2 LIMIT 1',[id,code])).rows[0]:local().find(x=>x.id===id&&x.accessCode===code);return r?publicOrder(r):null}
+export async function getOrderByCode(id,code){
+  await ready;
+  id=String(id||'').trim().toUpperCase();
+  code=String(code||'').trim();
+  // The public journal accepts only the MMW order number and its five-digit access code.
+  // The code is defined as the last five digits of the order number.
+  if(!/^MMW-\d{8}-\d{5}$/.test(id)||!/^[0-9]{5}$/.test(code))return null;
+  const derivedCode=id.slice(-5);
+  if(code!==derivedCode)return null;
+  let r;
+  if(usePg){
+    // Match both the stored access_code and the last five digits of the order number.
+    // This also keeps journal access working for orders created by an earlier build.
+    r=(await pool.query('SELECT * FROM orders WHERE id=$1 AND (access_code=$2 OR RIGHT(id,5)=$2) LIMIT 1',[id,code])).rows[0];
+  }else{
+    r=local().find(x=>x.id===id && (String(x.accessCode)===code || String(x.id).slice(-5)===code));
+  }
+  return r?publicOrder(r):null;
+}
 export async function listOrders(token){await ready;const rows=usePg?(await pool.query('SELECT * FROM orders WHERE access_token=$1 ORDER BY created_at DESC',[token])).rows:local().filter(x=>x.accessToken===token).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));return rows.map(publicOrder)}
 export async function listAllOrders(){await ready;const rows=usePg?(await pool.query('SELECT * FROM orders ORDER BY created_at DESC')).rows:local().sort((a,b)=>b.createdAt.localeCompare(a.createdAt));return rows.map(publicOrder)}
 export async function updateOrderStatus(id,status){await ready;const allowed=['Новая','В работе','Ожидает уточнения','Выполнена','Отменена'];if(!allowed.includes(status))throw new Error('Недопустимый статус');if(usePg){const r=await pool.query('UPDATE orders SET status=$2 WHERE id=$1 RETURNING *',[id,status]);return r.rows[0]?publicOrder(r.rows[0]):null}const rows=local();const x=rows.find(o=>o.id===id);if(!x)return null;x.status=status;save(rows);return publicOrder(x)}
