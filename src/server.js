@@ -53,14 +53,16 @@ app.post('/api/admin/test-notifications',admin,async(q,r)=>{
   catch(e){console.error(e);r.status(500).json({error:'Тест уведомлений не выполнен.'});}
 });
 
+// Public journal: only the five-digit access code is required.
 app.post('/api/order-access',async(q,r)=>{
   try{
     const ip=q.ip||q.socket.remoteAddress||'unknown',now=Date.now(),a=accessAttempts.get(ip)||[],recent=a.filter(t=>now-t<WINDOW);
     if(recent.length>=MAX_ATTEMPTS)return r.status(429).json({error:'Слишком много попыток. Повторите через 10 минут.'});
     recent.push(now);accessAttempts.set(ip,recent);
-    const id=String(q.body?.orderId||'').trim().toUpperCase(),code=String(q.body?.code||'').trim();
-    const order=await getOrderByCode(id,code);
-    if(!order)return r.status(404).json({error:'Заявка или код доступа не найдены.'});
+    const code=String(q.body?.code||'').trim();
+    if(!/^\d{5}$/.test(code))return r.status(400).json({error:'Введите ровно 5 цифр кода доступа.'});
+    const order=await getOrderByCode(code);
+    if(!order)return r.status(404).json({error:'Заявка с таким кодом не найдена.'});
     accessAttempts.delete(ip);r.json({order});
   }catch(e){console.error(e);r.status(500).json({error:'Не удалось открыть заявку.'});}
 });
@@ -68,8 +70,8 @@ app.post('/api/order-access',async(q,r)=>{
 app.get('/api/orders/:id/pdf',async(q,r)=>{
   try{
     const id=String(q.params.id||'').trim().toUpperCase(),code=String(q.query.code||'').trim();
-    const o=await getOrderByCode(id,code);
-    if(!o)return r.status(404).json({error:'Заявка или код доступа не найдены.'});
+    const o=await getOrderByCode(code);
+    if(!o||o.id!==id)return r.status(404).json({error:'Заявка или код доступа не найдены.'});
     const pdf=await orderPdf(o);
     r.setHeader('Content-Type','application/pdf');
     r.setHeader('Content-Disposition',`attachment; filename="${o.id}.pdf"`);
