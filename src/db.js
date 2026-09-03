@@ -16,12 +16,15 @@ async function init(){
 export const ready=init();
 function local(){return JSON.parse(fs.readFileSync(file,'utf8'))}
 function save(x){fs.writeFileSync(file,JSON.stringify(x,null,2))}
-function normalize(items=[]){const map=new Map([...catalog.packages,...catalog.services].map(x=>[x.id,x]));return items.filter(x=>map.has(x.id)).map(x=>({id:x.id,name:map.get(x.id).name,price:map.get(x.id).price,qty:Math.max(1,Math.min(99,Number(x.qty)||1))}))}
+const catalogItems=[...catalog.packages,...catalog.products,...catalog.services];
+const catalogById=new Map(catalogItems.map(x=>[String(x.id),x]));
+function normalize(items=[]){return items.filter(x=>x&&catalogById.has(String(x.id))).map(x=>{const item=catalogById.get(String(x.id));return {id:item.id,name:item.name,price:item.price,qty:Math.max(1,Math.min(99,Number(x.qty)||1))}})}
 function makeCode(){return String(crypto.randomInt(10000,100000))}
 export async function createOrder(p){
  await ready;const items=normalize(p.items);if(!items.length)throw new Error('Корзина пуста');
  const total=items.reduce((s,x)=>s+x.price*x.qty,0),createdAt=new Date().toISOString(),accessToken=crypto.randomBytes(24).toString('hex');let accessCode,id;
  for(let i=0;i<20;i++){accessCode=makeCode();id=`MMW-${new Date().toISOString().slice(0,10).replaceAll('-','')}-${accessCode}`;const exists=usePg?(await pool.query('SELECT 1 FROM orders WHERE id=$1 OR access_code=$2',[id,accessCode])).rowCount:local().some(x=>x.id===id||x.accessCode===accessCode);if(!exists)break}
+ if(!accessCode||!id)throw new Error('Не удалось сформировать идентификаторы заявки');
  const order={id,accessCode,accessToken,createdAt,status:'Новая',customerName:p.customerName,phone:p.phone,email:p.email,company:p.company||'',projectType:p.projectType||'',address:p.address||'',comment:p.comment||'',items,total};
  if(usePg)await pool.query('INSERT INTO orders (id,access_code,access_token,created_at,status,customer_name,phone,email,company,project_type,address,comment,items_json,total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)',[id,accessCode,accessToken,createdAt,'Новая',order.customerName,order.phone,order.email,order.company,order.projectType,order.address,order.comment,JSON.stringify(items),total]);else{const rows=local();rows.push(order);save(rows)}return order;
 }
