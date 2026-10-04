@@ -19,9 +19,11 @@ app.use(express.json({limit:'100kb'}));
 app.use(express.static(path.join(dir,'../public')));
 
 const admin=(q,r,next)=>{if(!config.adminKey)return r.status(503).json({error:'ADMIN_KEY не настроен на сервере.'});if(q.query.key===config.adminKey||q.headers['x-admin-key']===config.adminKey)return next();return r.status(401).json({error:'Доступ к журналу запрещён.'});};
-app.get('/api/health',(q,r)=>r.json({ok:true,app:'MMW-ORDER',database:Boolean(config.databaseUrl),email:Boolean(config.resendApiKey&&config.resendFrom&&config.adminEmail),telegram:Boolean(config.telegramBotToken&&config.telegramChatId)}));
+const emailConfig=()=>({configured:Boolean(config.resendApiKey&&config.resendFrom&&config.adminEmail),apiKeyConfigured:Boolean(config.resendApiKey),senderConfigured:Boolean(config.resendFrom),adminRecipientConfigured:Boolean(config.adminEmail)});
+app.get('/api/health',(q,r)=>r.json({ok:true,app:'MMW-ORDER',database:Boolean(config.databaseUrl),email:emailConfig().configured,telegram:Boolean(config.telegramBotToken&&config.telegramChatId)}));
 app.get('/api/config',(q,r)=>r.json({app:config.appName,telegramBotUsername:config.telegramBotUsername||''}));
 app.get('/api/catalog',(q,r)=>r.json(catalog));
+app.get('/api/admin/email-status',admin,(q,r)=>r.json({ok:true,email:emailConfig(),senderDomainConfigured:Boolean(config.resendFrom&&config.resendFrom.includes('@')),adminRecipientConfigured:Boolean(config.adminEmail)}));
 app.get('/api/admin/orders',admin,async(q,r)=>{try{r.json({orders:await listAllOrders(),statuses:orderStatuses});}catch(e){console.error(e);r.status(500).json({error:'Не удалось загрузить журнал.'});}});
 app.patch('/api/admin/orders/:id/status',admin,async(q,r)=>{try{const o=await updateOrderStatus(q.params.id,String(q.body?.status||''));if(!o)return r.status(404).json({error:'Заявка не найдена.'});r.json({order:o});}catch(e){r.status(400).json({error:e.message});}});
 app.post('/api/admin/test-notifications',admin,async(q,r)=>{try{r.json({notifications:await sendTestNotifications()});}catch(e){console.error(e);r.status(500).json({error:'Тест уведомлений не выполнен.'});}});
