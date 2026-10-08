@@ -23,7 +23,7 @@ function makeCode(){return String(crypto.randomInt(10000,100000))}
 export async function createOrder(p){
  await ready;const items=normalize(p.items);if(!items.length)throw new Error('Корзина пуста');
  const total=items.reduce((s,x)=>s+x.price*x.qty,0),createdAt=new Date().toISOString(),accessToken=crypto.randomBytes(24).toString('hex');let accessCode,id;
- for(let i=0;i<20;i++){accessCode=makeCode();id=`MMW-${new Date().toISOString().slice(0,10).replaceAll('-','')}-${accessCode}`;const exists=usePg?(await pool.query('SELECT 1 FROM orders WHERE id=$1 OR access_code=$2',[id,accessCode])).rowCount:local().some(x=>x.id===id||x.accessCode===accessCode);if(!exists)break}
+ for(let i=0;i<20;i++){accessCode=makeCode();const orderSuffix=String(crypto.randomInt(10000,100000));id=`MMW-${new Date().toISOString().slice(0,10).replaceAll('-','')}-${orderSuffix}`;const exists=usePg?(await pool.query('SELECT 1 FROM orders WHERE id=$1 OR access_code=$2',[id,accessCode])).rowCount:local().some(x=>x.id===id||x.accessCode===accessCode);if(!exists)break}
  if(!accessCode||!id)throw new Error('Не удалось сформировать идентификаторы заявки');
  const order={id,accessCode,accessToken,createdAt,status:'Новая',customerName:p.customerName,phone:p.phone,email:p.email,company:p.company||'',projectType:p.projectType||'',address:p.address||'',comment:p.comment||'',items,total};
  if(usePg)await pool.query('INSERT INTO orders (id,access_code,access_token,created_at,status,customer_name,phone,email,company,project_type,address,comment,items_json,total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)',[id,accessCode,accessToken,createdAt,'Новая',order.customerName,order.phone,order.email,order.company,order.projectType,order.address,order.comment,JSON.stringify(items),total]);else{const rows=local();rows.push(order);save(rows)}return order;
@@ -37,6 +37,33 @@ export async function getOrderByCredentials(id,code){
  if(usePg)r=(await pool.query('SELECT * FROM orders WHERE id=$1 AND access_code=$2 LIMIT 1',[id,code])).rows[0];
  else r=local().find(x=>String(x.id).toUpperCase()===id&&String(x.accessCode)===code);
  return r?publicOrder(r):null;
+}
+export async function getOrderByPhoneAndCode(phone,code){
+ await ready;
+ const normalizedPhone=String(phone||'').replace(/\D/g,'');
+ code=String(code||'').trim();
+ if(normalizedPhone.length<7||normalizedPhone.length>15||!/^\d{5}$/.test(code))return null;
+ let r;
+ if(usePg)r=(await pool.query("SELECT * FROM orders WHERE regexp_replace(phone, '[^0-9]', '', 'g')=$1 AND access_code=$2 LIMIT 1",[normalizedPhone,code])).rows[0];
+ else r=local().find(x=>String(x.phone||'').replace(/\D/g,'')===normalizedPhone&&String(x.accessCode)===code);
+ return r?publicOrder(r):null;
+}
+export async function getOrdersByPhoneAndCode(phone,code){
+ await ready;
+ const normalizedPhone=String(phone||'').replace(/\D/g,'');
+ code=String(code||'').trim();
+ if(normalizedPhone.length<7||normalizedPhone.length>15||!/^\d{5}$/.test(code))return [];
+ let matches,rows;
+ if(usePg){
+   matches=(await pool.query("SELECT id FROM orders WHERE regexp_replace(phone, '[^0-9]', '', 'g')=$1 AND access_code=$2 LIMIT 1",[normalizedPhone,code])).rows;
+   if(!matches.length)return [];
+   rows=(await pool.query("SELECT * FROM orders WHERE regexp_replace(phone, '[^0-9]', '', 'g')=$1 ORDER BY created_at DESC",[normalizedPhone])).rows;
+ }else{
+   const all=local();
+   if(!all.some(x=>String(x.phone||'').replace(/\D/g,'')===normalizedPhone&&String(x.accessCode)===code))return [];
+   rows=all.filter(x=>String(x.phone||'').replace(/\D/g,'')===normalizedPhone).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+ }
+ return rows.map(publicOrder);
 }
 export async function getOrderByCode(code){
  await ready;
