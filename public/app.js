@@ -1,4 +1,5 @@
-function readSavedCart(){try{const value=JSON.parse(localStorage.getItem('MMWCart')||'[]');return Array.isArray(value)?value.filter(x=>x&&x.id!=null).map(x=>({id:x.id,qty:Math.max(1,Math.min(99,Number(x.qty)||1))})):[]}catch(error){console.warn('Saved cart was invalid; starting with an empty cart.',error);return []}}\nconst state={catalog:window.MMW_ORDER_CATALOG,cart:readSavedCart(),config:{app:'MMW-ORDER',telegramBotUsername:''}};
+function readSavedCart(){try{const value=JSON.parse(localStorage.getItem('MMWCart')||'[]');return Array.isArray(value)?value.filter(x=>x&&x.id!=null).map(x=>({id:x.id,qty:Math.max(1,Math.min(99,Number(x.qty)||1))})):[]}catch(error){console.warn('Saved cart was invalid; starting with an empty cart.',error);return []}}
+const state={catalog:window.MMW_ORDER_CATALOG,cart:readSavedCart(),config:{app:'MMW-ORDER',telegramBotUsername:''}};
 const $=s=>document.querySelector(s),money=n=>new Intl.NumberFormat('uk-UA',{style:'currency',currency:'UAH',maximumFractionDigits:0}).format(n);
 const esc=s=>String(s??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[m]));
 function boot(){try{if(!state.catalog)throw new Error('Локальный каталог MMW-ORDER не найден');renderCatalog();renderCart();bind();setupTelegram();applyDeepLink();}catch(e){console.error(e);toast('Не удалось загрузить приложение')}}
