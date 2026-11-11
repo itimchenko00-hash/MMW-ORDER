@@ -4,8 +4,8 @@ import {getOrderByCode,listAllOrders,updateOrderStatus,orderStatuses} from './db
 const money=n=>new Intl.NumberFormat('uk-UA',{style:'currency',currency:'UAH',maximumFractionDigits:0}).format(n);
 const esc=s=>String(s??'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 const SITE='https://mmw-company.onrender.com';
-const BOT_USERNAME=String(config.telegramBotUsername||'MMW-COMPANY_BOT').replace(/^@/,'');
-const BOT_URL='https://t.me/'+BOT_USERNAME;
+const BOT_USERNAME=String(config.telegramBotUsername||'').replace(/^@/,'');
+const BOT_URL=BOT_USERNAME ? 'https://t.me/'+BOT_USERNAME : '';
 
 async function tg(method,body){
   const token=String(config.telegramBotToken||'').trim();
@@ -45,7 +45,7 @@ export async function handleTelegramUpdate(update){
       projects:'Проектные концепции MMW-COMPANY: '+SITE+'/#projects',
       catalog:'Каталог направлений: '+SITE+'/catalog.html',
       community:'Отзывы и сообщество: '+SITE+'/feedback.html',
-      contact:'Связь с MMW-COMPANY:\nEmail: mmw.company28@gmail.com\nInstagram: https://instagram.com/_mmwcompany\nFacebook: https://www.facebook.com/1451024248083457\nTelegram: '+BOT_URL+'\nWhatsApp пока не подключён. Для отправки обращения используйте форму: '+SITE+'/#contact',
+      contact:'Связь с MMW-COMPANY:\nEmail: mmw.company28@gmail.com\nInstagram: https://instagram.com/_mmwcompany\nFacebook: https://www.facebook.com/1451024248083457\nTelegram: '+(BOT_URL||'публичная ссылка уточняется')+'\nWhatsApp пока не подключён. Для отправки обращения используйте форму: '+SITE+'/#contact',
       legal:'Правовые документы и условия: '+SITE+'/legal.html',
       careers:'Карьера и профессиональное сотрудничество: '+SITE+'/careers.html',
       account:'Личный кабинет MMW-COMPANY: '+SITE+'/account.html',
